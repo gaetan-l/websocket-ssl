@@ -21,17 +21,7 @@ import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 
-/**
- * Outputs index page content.
- */
-public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
-
-//    private final String websocketPath;
-
-//    public WebSocketIndexPageHandler(String websocketPath) {
-//        this.websocketPath = websocketPath;
-//    }
-
+public class WebSocketServerHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
         // Handle a bad request.
@@ -50,28 +40,6 @@ public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullH
         sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN,
                 ctx.alloc().buffer(0)));
         return;
-
-//        // Allow only GET methods.
-//        if (!GET.equals(req.method())) {
-//            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), FORBIDDEN,
-//                                                                   ctx.alloc().buffer(0)));
-//            return;
-//        }
-//
-//        // Send the index page
-//        if ("/".equals(req.uri()) || "/index.html".equals(req.uri())) {
-//            String webSocketLocation = getWebSocketLocation(ctx.pipeline(), req, websocketPath);
-//            ByteBuf content = WebSocketServerIndexPage.getContent(webSocketLocation);
-//            FullHttpResponse res = new DefaultFullHttpResponse(req.protocolVersion(), OK, content);
-//
-//            res.headers().set(CONTENT_TYPE, "text/html; charset=UTF-8");
-//            HttpUtil.setContentLength(res, content.readableBytes());
-//
-//            sendHttpResponse(ctx, req, res);
-//        } else {
-//            sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), NOT_FOUND,
-//                                                                   ctx.alloc().buffer(0)));
-//        }
     }
 
     @Override
@@ -95,13 +63,4 @@ public class WebSocketIndexPageHandler extends SimpleChannelInboundHandler<FullH
             future.addListener(ChannelFutureListener.CLOSE);
         }
     }
-
-//    private static String getWebSocketLocation(ChannelPipeline cp, HttpRequest req, String path) {
-//        String protocol = "ws";
-//        if (cp.get(SslHandler.class) != null) {
-//            // SSL in use so use Secure WebSockets
-//            protocol = "wss";
-//        }
-//        return protocol + "://" + req.headers().get(HttpHeaderNames.HOST) + path;
-//    }
 }

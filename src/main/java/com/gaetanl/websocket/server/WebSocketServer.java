@@ -1,56 +1,54 @@
-/*
- * Copyright 2012 The Netty Project
- *
- * The Netty Project licenses this file to you under the Apache License,
- * version 2.0 (the "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at:
- *
- *   https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations
- * under the License.
- */
 package com.gaetanl.websocket.server;
 
-import com.gaetanl.websocket.util.ServerUtil;
+import java.util.*;
+
+import org.slf4j.*;
+
+import com.gaetanl.websocket.util.*;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import io.netty.handler.codec.http.*;
+import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
+import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketServerCompressionHandler;
 import io.netty.handler.logging.*;
 import io.netty.handler.ssl.SslContext;
 
-/**
- * An HTTP server which serves Web Socket requests at:
- *
- * http://localhost:8080/websocket
- *
- * Open your browser at <a href="http://localhost:8080/">http://localhost:8080/</a>, then the demo page will be loaded
- * and a Web Socket connection will be made automatically.
- *
- * This server illustrates support for the different web socket specification versions and will work with:
- *
- * <ul>
- * <li>Safari 5+ (draft-ietf-hybi-thewebsocketprotocol-00)
- * <li>Chrome 6-13 (draft-ietf-hybi-thewebsocketprotocol-00)
- * <li>Chrome 14+ (draft-ietf-hybi-thewebsocketprotocol-10)
- * <li>Chrome 16+ (RFC 6455 aka draft-ietf-hybi-thewebsocketprotocol-17)
- * <li>Firefox 7+ (draft-ietf-hybi-thewebsocketprotocol-10)
- * <li>Firefox 11+ (RFC 6455 aka draft-ietf-hybi-thewebsocketprotocol-17)
- * </ul>
- */
-public final class WebSocketServer {
 
-    static final boolean SSL = true;//System.getProperty("ssl") != null;
-    static final int PORT = Integer.parseInt(System.getProperty("port", SSL? "8443" : "8080"));
+public final class WebSocketServer {
+    private static final Logger logger = LoggerFactory.getLogger(WebSocketServer.class);
+
+    private enum WebSocketProtocol {WS, WSS};
+    private static final List<Channel> openChannels = new ArrayList<Channel>();
 
     public static void main(String[] args) throws Exception {
-        // Configure SSL.
-        final SslContext sslCtx = ServerUtil.buildSslContext(SSL);
+        final String protocol;
+        final int port;
+
+        logger.info("Initiating server configuration");
+        try {
+            protocol = WebSocketProtocol.valueOf(args[0]).toString().toLowerCase();
+            port = Integer.valueOf(args[1]);
+        }
+        catch (Exception e) {
+            logger.error("Exception parsing main arguments", e);
+
+            StringBuilder argsString = new StringBuilder().append("[");
+            for (int i = 0 ; i < args.length ; i++) {
+                argsString.append(args[i]);
+                if (i < args.length - 1) {
+                    argsString.append(" ");
+                }
+            }
+            argsString.append("]");
+
+            throw new IllegalArgumentException("Excepted args: WS|WSS port [HTTPServerHandler class name], got: " + argsString.toString());
+        }
+
+        final SslContext sslCtx = ServerUtil.buildSslContext("wss".equalsIgnoreCase(protocol));
 
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
@@ -59,13 +57,28 @@ public final class WebSocketServer {
             b.group(bossGroup, workerGroup)
              .channel(NioServerSocketChannel.class)
              .handler(new LoggingHandler(LogLevel.INFO))
-             .childHandler(new WebSocketServerInitializer(sslCtx));
+             .childHandler(new ChannelInitializer<SocketChannel>() {
+                @Override
+                protected void initChannel(SocketChannel ch) throws Exception {
+                    ChannelPipeline pipeline = ch.pipeline();
+                    if (sslCtx != null) {
+                        System.out.println("Adding SSL handler");
+                        pipeline.addLast(sslCtx.newHandler(ch.alloc()));
+                    }
+                    pipeline.addLast(new HttpServerCodec());
+                    pipeline.addLast(new HttpObjectAggregator(65536));
+                    //pipeline.addLast(new WebSocketServerHttpHandler());
+                    pipeline.addLast(new WebSocketServerCompressionHandler());
+                    pipeline.addLast(new WebSocketServerProtocolHandler(WebSocketUtil.WEBSOCKET_PATH, null, true));
+                    pipeline.addLast(new WebSocketServerFrameHandler());
 
-            Channel ch = b.bind(PORT).sync().channel();
+                    System.out.println("Adding logging handler");
+                    pipeline.addLast(new OutboundLoggingHandler());
+                }
+             });
 
-            System.out.println("Open your web browser and navigate to " +
-                    (SSL? "https" : "http") + "://127.0.0.1:" + PORT + '/');
-
+            Channel ch = b.bind(port).sync().channel();
+            logger.info(String.format("[OK] Server started at %s://%s:%d", protocol, "localhost", port));
             ch.closeFuture().sync();
         } finally {
             bossGroup.shutdownGracefully();

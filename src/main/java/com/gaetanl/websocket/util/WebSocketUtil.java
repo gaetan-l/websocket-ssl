@@ -6,6 +6,8 @@ import java.net.InetSocketAddress;
 import io.netty.channel.*;
 
 public class WebSocketUtil {
+    public static final String WEBSOCKET_PATH = "/websocket";
+
     public static InetSocketAddress getRemoteAddress(ChannelHandlerContext ctx) {
         return getRemoteAddress(ctx.channel());
     }

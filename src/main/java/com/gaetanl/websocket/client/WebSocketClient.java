@@ -5,7 +5,10 @@ import java.net.URI;
 
 import org.slf4j.*;
 
+import com.gaetanl.websocket.message.*;
 import com.gaetanl.websocket.util.*;
+import com.gaetanl.websocket.util.WebSocketUtil;
+import com.google.gson.*;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.Unpooled;
@@ -47,7 +50,7 @@ public final class WebSocketClient {
             throw new IllegalArgumentException("Excepted args: WS|WSS host port, got: " + argsString.toString());
         }
 
-        final URI uri = new URI(String.format("%s://%s:%d/websocket", protocol, host, port));
+        final URI uri = new URI(String.format("%s://%s:%d%s", protocol, host, port, WebSocketUtil.WEBSOCKET_PATH));
         final SslContext sslCtx = ClientUtil.buildSslContext("wss".equalsIgnoreCase(protocol));
 
         EventLoopGroup group = new NioEventLoopGroup();
@@ -55,10 +58,8 @@ public final class WebSocketClient {
             // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
             // If you change it to V00, ping is not supported and remember to change
             // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
-            final WebSocketClientHandler handler =
-                    new WebSocketClientHandler(
-                            WebSocketClientHandshakerFactory.newHandshaker(
-                                    uri, WebSocketVersion.V13, null, true, new DefaultHttpHeaders()));
+            final WebSocketClientHandler handler = new WebSocketClientHandler(
+                    WebSocketClientHandshakerFactory.newHandshaker(uri, WebSocketVersion.V13, null, true, new DefaultHttpHeaders()));
 
             Bootstrap b = new Bootstrap();
             b.group(group)
@@ -67,8 +68,8 @@ public final class WebSocketClient {
                  @Override
                  protected void initChannel(SocketChannel ch) {
                      ChannelPipeline p = ch.pipeline();
+
                      if (sslCtx != null) {
-                         System.out.println("Adding SSL handler");
                          p.addLast(sslCtx.newHandler(ch.alloc(), host, port));
                      }
                      p.addLast(
@@ -77,28 +78,60 @@ public final class WebSocketClient {
                              WebSocketClientCompressionHandler.INSTANCE,
                              handler,
                              new OutboundLoggingHandler());
-                     System.out.println("Added logging handler");
                  }
              });
 
+            logger.info(String.format("Trying to create channel with %s://%s:%d", protocol, uri.getHost(), port));
             Channel ch = b.connect(uri.getHost(), port).sync().channel();
             handler.handshakeFuture().sync();
+            logger.info("[OK] Channel created, enter commands:");
 
             BufferedReader console = new BufferedReader(new InputStreamReader(System.in));
-            while (true) {
-                String msg = console.readLine();
-                if (msg == null) {
+            while (ch.isActive()) {
+                String input = console.readLine();
+                if (input == null) {
                     break;
-                } else if ("bye".equals(msg.toLowerCase())) {
-                    ch.writeAndFlush(new CloseWebSocketFrame());
-                    ch.closeFuture().sync();
-                    break;
-                } else if ("ping".equals(msg.toLowerCase())) {
-                    WebSocketFrame frame = new PingWebSocketFrame(Unpooled.wrappedBuffer(new byte[] { 8, 1, 8, 1 }));
+                }
+
+                WsMessage message = null;
+
+                try {
+                    if ("ping".equals(input)) {
+                        WebSocketFrame frame = new PingWebSocketFrame(Unpooled.wrappedBuffer(new byte[] { 8, 1, 8, 1 }));
+                        ch.writeAndFlush(frame);
+                    }
+                    else if ("deconnection".equals(input)) {
+                        message = new WsMsgDeconnexion();
+                        logger.debug("Sending disconnection message to server...");
+                    }
+                    else {
+                        message = new WsMsgText();
+                        ((WsMsgText) message).setText(input);
+                    }
+                }
+                catch (Exception e) {
+                    logger.error("Error during websocket server parsing loop", e.getMessage(), e);
+                    e.printStackTrace();
+                }
+
+                if (message != null) {
+                    Gson gson = new GsonBuilder().setPrettyPrinting().create();
+                    String json = gson.toJson(message);
+
+                    WebSocketFrame frame = new TextWebSocketFrame(json);
                     ch.writeAndFlush(frame);
-                } else {
-                    WebSocketFrame frame = new TextWebSocketFrame(msg);
-                    ch.writeAndFlush(frame);
+
+                    if (message instanceof WsMsgDeconnexion) {
+                        logger.debug("Closing channel...");
+                        ChannelFuture futureClose = ch.closeFuture().sync();
+
+                        futureClose.addListener(new ChannelFutureListener() {
+                            @Override
+                            public void operationComplete(ChannelFuture arg0) throws Exception {
+                                logger.debug("[OK] Channel closed");
+                            }
+                        });
+                    }
                 }
             }
         } finally {
