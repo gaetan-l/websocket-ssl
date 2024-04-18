@@ -4,6 +4,7 @@ import java.io.*;
 import java.net.InetSocketAddress;
 
 import io.netty.channel.*;
+import io.netty.handler.ssl.SslHandler;
 
 public class WebSocketUtil {
     public static final String WEBSOCKET_PATH = "/websocket";
@@ -49,5 +50,13 @@ public class WebSocketUtil {
 
         // Convert the StringBuilder to a String and return it
         return stringBuilder.toString();
+    }
+
+    public static enum Direction {INBOUND, OUTBOUND};
+    public static String getMessageDetails(final Direction direction, final Object message, final Channel channel) {
+        final String channelDetails = channel.toString();
+        boolean isSecure = channel.pipeline().get(SslHandler.class) != null;
+        return String.format("%s (%s) message on channel (%s) %s",
+                direction, message.getClass().getSimpleName(), isSecure ? "SECURE" : "NOT SECURE", channelDetails);
     }
 }

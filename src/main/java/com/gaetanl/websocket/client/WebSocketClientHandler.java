@@ -38,10 +38,12 @@
 package com.gaetanl.websocket.client;
 
 import static com.gaetanl.websocket.message.WsMessageConstants.*;
+import static com.gaetanl.websocket.util.WebSocketUtil.Direction.INBOUND;
 
 import org.slf4j.*;
 
 import com.gaetanl.websocket.message.*;
+import com.gaetanl.websocket.util.WebSocketUtil;
 import com.google.gson.*;
 
 import io.netty.channel.*;
@@ -80,7 +82,7 @@ public class WebSocketClientHandler extends SimpleChannelInboundHandler<Object> 
 
     @Override
     public void channelRead0(ChannelHandlerContext ctx, Object msg) throws Exception {
-        logger.debug(String.format("Received (%s) frame on channel %s", msg.getClass().getSimpleName(), ctx.channel()));
+        logger.debug(WebSocketUtil.getMessageDetails(INBOUND, msg, ctx.channel()));
 
         Channel ch = ctx.channel();
         if (!handshaker.isHandshakeComplete()) {

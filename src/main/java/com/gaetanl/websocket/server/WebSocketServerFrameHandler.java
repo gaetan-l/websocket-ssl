@@ -15,9 +15,12 @@
  */
 package com.gaetanl.websocket.server;
 
+import static com.gaetanl.websocket.util.WebSocketUtil.Direction.INBOUND;
+
 import org.slf4j.*;
 
 import com.gaetanl.websocket.message.*;
+import com.gaetanl.websocket.util.WebSocketUtil;
 import com.google.gson.*;
 
 import io.netty.channel.*;
@@ -31,7 +34,7 @@ public class WebSocketServerFrameHandler extends SimpleChannelInboundHandler<Web
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, WebSocketFrame frame) throws Exception {
-        logger.debug(String.format("Received (%s) frame on channel %s", frame.getClass().getSimpleName(), ctx.channel()));
+        logger.debug(WebSocketUtil.getMessageDetails(INBOUND, frame, ctx.channel()));
 
         // Ping and pong frames already handled
 

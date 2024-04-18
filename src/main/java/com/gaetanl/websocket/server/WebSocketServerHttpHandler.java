@@ -15,15 +15,32 @@
  */
 package com.gaetanl.websocket.server;
 
+import static com.gaetanl.websocket.util.WebSocketUtil.Direction.INBOUND;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
+
+import org.slf4j.*;
+
+import com.gaetanl.websocket.util.WebSocketUtil;
 
 import io.netty.buffer.ByteBufUtil;
 import io.netty.channel.*;
 import io.netty.handler.codec.http.*;
 
 public class WebSocketServerHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+    private static final Logger logger = LoggerFactory.getLogger(WebSocketServerHttpHandler.class);
+
+    @Override
+    public void channelRegistered(ChannelHandlerContext ctx) throws Exception {
+        super.channelRegistered(ctx);
+        System.out.println(String.format("WebSocketServerHttpHandler.channelRegistered(%s)", WebSocketUtil.getRemoteAddress(ctx)));
+
+        WebSocketServer.addOpenChannel(ctx.channel());
+    }
+
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest req) throws Exception {
+        logger.debug(WebSocketUtil.getMessageDetails(INBOUND, req, ctx.channel()));
+
         // Handle a bad request.
         if (!req.decoderResult().isSuccess()) {
             sendHttpResponse(ctx, req, new DefaultFullHttpResponse(req.protocolVersion(), BAD_REQUEST,

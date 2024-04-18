@@ -1,5 +1,7 @@
 package com.gaetanl.websocket.util;
 
+import static com.gaetanl.websocket.util.WebSocketUtil.Direction.OUTBOUND;
+
 import org.slf4j.*;
 
 import io.netty.channel.*;
@@ -10,8 +12,7 @@ public class OutboundLoggingHandler extends ChannelOutboundHandlerAdapter {
 
     @Override
     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-        logger.debug(String.format("Sent (%s) frame on channel %s", msg.getClass().getSimpleName(), ctx.channel()));
-        System.out.println(String.format("syso Sent (%s) frame on channel %s", msg.getClass().getSimpleName(), ctx.channel()));
+        logger.debug(WebSocketUtil.getMessageDetails(OUTBOUND, msg, ctx.channel()));
 
         String type = msg.getClass().getSimpleName();
         if (msg instanceof TextWebSocketFrame) {

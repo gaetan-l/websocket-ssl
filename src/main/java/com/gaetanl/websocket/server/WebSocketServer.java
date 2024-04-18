@@ -85,4 +85,8 @@ public final class WebSocketServer {
             workerGroup.shutdownGracefully();
         }
     }
+
+    public static void addOpenChannel(Channel channel) {
+        openChannels.add(channel);
+    }
 }
